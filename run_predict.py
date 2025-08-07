@@ -8,11 +8,11 @@ import os
 import sys
 
 # Add workspace to Python path to find the MultiTalk modules
-sys.path.insert(0, '/workspace')
+sys.path.insert(0, '/workspace/cog-MultiTalk')
 
 # Set up environment variables first
-MODEL_CACHE = "/workspace/weights"
-BASE_URL = f"https://weights.replicate.delivery/default/multitalk/weights/"
+MODEL_CACHE = "/workspace/cog-MultiTalk/weights"
+BASE_URL = "https://weights.replicate.delivery/default/multitalk/weights/"
 os.environ["HF_HOME"] = MODEL_CACHE
 os.environ["TORCH_HOME"] = MODEL_CACHE
 os.environ["HF_DATASETS_CACHE"] = MODEL_CACHE
@@ -22,15 +22,12 @@ os.environ["HUGGINGFACE_HUB_CACHE"] = MODEL_CACHE
 import argparse
 import subprocess
 import time
-import json
 import tempfile
 import logging
 import warnings
 import shutil
 from typing import Optional
-from datetime import datetime
 from types import SimpleNamespace
-from pathlib import Path
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings('ignore')
@@ -39,7 +36,6 @@ import torch
 import numpy as np
 import random
 import soundfile as sf
-from PIL import Image
 
 # Import MultiTalk components
 import wan
@@ -173,9 +169,9 @@ class MultiTalkPredictor:
         )
         
         # Model paths
-        self.ckpt_dir = "/workspace/weights/Wan2.1-I2V-14B-480P"
-        self.wav2vec_dir = "/workspace/weights/chinese-wav2vec2-base"
-        self.multitalk_dir = "/workspace/weights/MeiGen-MultiTalk"
+        self.ckpt_dir = "/workspace/cog-MultiTalk/weights/Wan2.1-I2V-14B-480P"
+        self.wav2vec_dir = "/workspace/cog-MultiTalk/weights/chinese-wav2vec2-base"
+        self.multitalk_dir = "/workspace/cog-MultiTalk/weights/MeiGen-MultiTalk"
         
         # Initialize device for single GPU
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -387,7 +383,7 @@ class MultiTalkPredictor:
             
             # Save video (following original save pattern)
             output_name = f"multitalk_{abs(hash(prompt + str(seed))) % 10000}"
-            print(f"💾 Saving video...")
+            print("💾 Saving video...")
             save_video_ffmpeg(video, output_name, [input_data['video_audio']])
             
             # Find and return generated video
@@ -400,13 +396,13 @@ class MultiTalkPredictor:
                         break
                 
                 if not os.path.exists(output_file):
-                    raise RuntimeError(f"Video generation failed - output file not found")
+                    raise RuntimeError("Video generation failed - output file not found")
             
             # Handle output path
             if output_path:
                 final_output = output_path
             else:
-                final_output = f"/workspace/outputs/final_{output_name}.mp4"
+                final_output = f"/workspace/cog-MultiTalk/outputs/final_{output_name}.mp4"
             
             # Ensure output directory exists
             os.makedirs(os.path.dirname(final_output), exist_ok=True)
