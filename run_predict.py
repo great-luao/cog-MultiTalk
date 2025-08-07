@@ -1,28 +1,36 @@
-# Prediction interface for Cog ⚙️
-# https://cog.run/python
+#!/usr/bin/env python3
+"""
+RunPod-compatible wrapper for MultiTalk prediction
+Removes Cog dependencies while maintaining all functionality
+"""
 
 import os
-MODEL_CACHE = "weights"
-BASE_URL = f"https://weights.replicate.delivery/default/multitalk/{MODEL_CACHE}/"
+import sys
+
+# Add workspace to Python path to find the MultiTalk modules
+sys.path.insert(0, '/workspace')
+
+# Set up environment variables first
+MODEL_CACHE = "/workspace/weights"
+BASE_URL = f"https://weights.replicate.delivery/default/multitalk/weights/"
 os.environ["HF_HOME"] = MODEL_CACHE
 os.environ["TORCH_HOME"] = MODEL_CACHE
 os.environ["HF_DATASETS_CACHE"] = MODEL_CACHE
 os.environ["TRANSFORMERS_CACHE"] = MODEL_CACHE
 os.environ["HUGGINGFACE_HUB_CACHE"] = MODEL_CACHE
 
-import os
+import argparse
 import subprocess
 import time
 import json
 import tempfile
 import logging
-import sys
 import warnings
 import shutil
 from typing import Optional
 from datetime import datetime
 from types import SimpleNamespace
-from cog import BasePredictor, Input, Path
+from pathlib import Path
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings('ignore')
@@ -138,9 +146,9 @@ def download_weights(url: str, dest: str) -> None:
     print("[+] Download completed in: ", time.time() - start, "seconds")
 
 
-class Predictor(BasePredictor):
-    def setup(self) -> None:
-        """Load the model into memory to make running multiple predictions efficient"""
+class MultiTalkPredictor:
+    def __init__(self):
+        """Initialize the MultiTalk model"""
         # Create model cache directory if it doesn't exist
         os.makedirs(MODEL_CACHE, exist_ok=True)
 
@@ -165,9 +173,9 @@ class Predictor(BasePredictor):
         )
         
         # Model paths
-        self.ckpt_dir = "weights/Wan2.1-I2V-14B-480P"
-        self.wav2vec_dir = "weights/chinese-wav2vec2-base"
-        self.multitalk_dir = "weights/MeiGen-MultiTalk"
+        self.ckpt_dir = "/workspace/weights/Wan2.1-I2V-14B-480P"
+        self.wav2vec_dir = "/workspace/weights/chinese-wav2vec2-base"
+        self.multitalk_dir = "/workspace/weights/MeiGen-MultiTalk"
         
         # Initialize device for single GPU
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -227,37 +235,16 @@ class Predictor(BasePredictor):
 
     def predict(
         self,
-        image: Path = Input(description="Reference image containing the person(s) for video generation"),
-        first_audio: Path = Input(description="First audio file for driving the conversation"),
-        prompt: str = Input(
-            description="Text prompt describing the desired interaction or conversation scenario",
-            default="A smiling man and woman wearing headphones sit in front of microphones, appearing to host a podcast."
-        ),
-        second_audio: Optional[Path] = Input(
-            description="Second audio file for multi-person conversation (optional)",
-            default=None
-        ),
-        num_frames: int = Input(
-            description="Number of frames to generate (automatically adjusted to nearest valid value of form 4n+1, e.g., 81, 181)",
-            default=81,
-            ge=25,
-            le=201
-        ),
-        sampling_steps: int = Input(
-            description="Number of sampling steps (higher = better quality, lower = faster)",
-            default=40,
-            ge=2,
-            le=100
-        ),
-        seed: Optional[int] = Input(
-            description="Random seed for reproducible results",
-            default=None
-        ),
-        turbo: bool = Input(
-            description="Enable turbo mode optimizations (adjusts thresholds and guidance scales for speed)",
-            default=True
-        )
-    ) -> Path:
+        image: str,
+        first_audio: str,
+        prompt: str = "A smiling man and woman wearing headphones sit in front of microphones, appearing to host a podcast.",
+        second_audio: Optional[str] = None,
+        num_frames: int = 81,
+        sampling_steps: int = 40,
+        seed: Optional[int] = None,
+        turbo: bool = True,
+        output_path: Optional[str] = None
+    ) -> str:
         """Generate a conversational video from audio and reference image"""
         
         # Auto-correct frame count to nearest valid value (4n+1 format)
@@ -385,7 +372,7 @@ class Predictor(BasePredictor):
             # Generate video using loaded pipeline (exact parameters from original)
             video = self.wan_i2v.generate(
                 input_data,
-                size_buckget="multitalk-480",
+                size_buckket="multitalk-480",
                 motion_frame=25,
                 frame_num=num_frames,
                 shift=shift,
@@ -400,7 +387,7 @@ class Predictor(BasePredictor):
             
             # Save video (following original save pattern)
             output_name = f"multitalk_{abs(hash(prompt + str(seed))) % 10000}"
-            print("💾 Saving video...")
+            print(f"💾 Saving video...")
             save_video_ffmpeg(video, output_name, [input_data['video_audio']])
             
             # Find and return generated video
@@ -413,15 +400,66 @@ class Predictor(BasePredictor):
                         break
                 
                 if not os.path.exists(output_file):
-                    raise RuntimeError("Video generation failed - output file not found")
+                    raise RuntimeError(f"Video generation failed - output file not found")
             
-            # Copy to permanent location for return
-            final_output = f"/tmp/final_{output_name}.mp4"
+            # Handle output path
+            if output_path:
+                final_output = output_path
+            else:
+                final_output = f"/workspace/outputs/final_{output_name}.mp4"
+            
+            # Ensure output directory exists
+            os.makedirs(os.path.dirname(final_output), exist_ok=True)
+            
+            # Copy to final location
             shutil.copy2(output_file, final_output)
+            
+            # Clean up temporary file
+            if os.path.exists(output_file):
+                os.remove(output_file)
             
             # Cleanup GPU memory for optimal performance in subsequent runs
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 
             print(f"✅ Video generation completed: {final_output}")
-            return Path(final_output)
+            return final_output
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Generate conversational videos with MultiTalk')
+    parser.add_argument('--image', type=str, required=True, help='Path to reference image')
+    parser.add_argument('--first-audio', type=str, required=True, help='Path to first audio file')
+    parser.add_argument('--prompt', type=str, default="A smiling man and woman wearing headphones sit in front of microphones, appearing to host a podcast.", help='Text prompt describing the scene')
+    parser.add_argument('--second-audio', type=str, default=None, help='Path to second audio file (optional, for multi-person)')
+    parser.add_argument('--num-frames', type=int, default=81, help='Number of frames to generate (25-201)')
+    parser.add_argument('--sampling-steps', type=int, default=40, help='Number of sampling steps (2-100)')
+    parser.add_argument('--seed', type=int, default=None, help='Random seed for reproducibility')
+    parser.add_argument('--turbo', action='store_true', help='Enable turbo mode for faster generation')
+    parser.add_argument('--no-turbo', dest='turbo', action='store_false', help='Disable turbo mode for better quality')
+    parser.add_argument('--output', type=str, default=None, help='Output video path')
+    parser.set_defaults(turbo=True)
+    
+    args = parser.parse_args()
+    
+    # Initialize predictor
+    predictor = MultiTalkPredictor()
+    
+    # Run prediction
+    output_path = predictor.predict(
+        image=args.image,
+        first_audio=args.first_audio,
+        prompt=args.prompt,
+        second_audio=args.second_audio,
+        num_frames=args.num_frames,
+        sampling_steps=args.sampling_steps,
+        seed=args.seed,
+        turbo=args.turbo,
+        output_path=args.output
+    )
+    
+    print(f"\n🎉 Video saved to: {output_path}")
+
+
+if __name__ == "__main__":
+    main()
