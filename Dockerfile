@@ -17,26 +17,27 @@ ENV HF_DATASETS_CACHE=/workspace/weights
 ENV TRANSFORMERS_CACHE=/workspace/weights
 ENV HUGGINGFACE_HUB_CACHE=/workspace/weights
 
-# Install system dependencies in smaller, more efficient steps
+# Install system dependencies and add deadsnakes PPA (no empty continuation lines)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     software-properties-common \
     ca-certificates \
-    && add-apt-repository ppa:deadsnakes/ppa \
-    && apt-get update && apt-get install -y --no-install-recommends \
     git \
     wget \
     curl \
     ffmpeg \
     build-essential \
     ninja-build \
-    pkg-config \
+    pkg-config && \
+    add-apt-repository -y ppa:deadsnakes/ppa && \
+    apt-get update && \
+    rm -rf /var/lib/apt/lists/*
 
-# Install Python 3.12
+# Install Python 3.12 (separate RUN; no trailing backslash)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.12 \
-    python3.12-dev \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+    python3.12-dev && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get clean
 
 # Install pip for Python 3.12
 RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.12
