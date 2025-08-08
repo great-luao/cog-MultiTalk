@@ -368,7 +368,7 @@ class MultiTalkPredictor:
             # Generate video using loaded pipeline (exact parameters from original)
             video = self.wan_i2v.generate(
                 input_data,
-                size_buckket="multitalk-480",
+                size_buckget="multitalk-480",
                 motion_frame=25,
                 frame_num=num_frames,
                 shift=shift,
