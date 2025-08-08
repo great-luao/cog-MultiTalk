@@ -1,35 +1,39 @@
-# The .dockerignore file excludes files from the container build process.
-#
-# https://docs.docker.com/engine/reference/builder/#dockerignore-file
+# Git
+.git
+.gitignore
 
-# Exclude Git files
-**/.git
-**/.github
-**/.gitignore
+# Python cache
+__pycache__/
+*.pyc
 
-# Exclude Python cache files
-__pycache__
-.mypy_cache
-.pytest_cache
-.ruff_cache
+# Model weights
+weights/
+*.pt
+*.pth
+*.bin
+*.safetensors
 
-# Exclude Python virtual environment
-/venv
-
-# Replicate
-/weights/*
-/weights-OLD/*
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.webp
-*.heic
-*.heif
-*.hevc
-*.h264
+# Outputs
+outputs/
 *.mp4
-*.mov
-*.avi
-*.mkv
-*.flv
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Original Cog files
+cog.yaml
+predict.py
+
+# Run predict script (managed in workspace)
+run_predict.py
+
+# Documentation except README.md
+*.md
+!README.md
+
+# Build script
+build.sh
