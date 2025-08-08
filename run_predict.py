@@ -179,7 +179,7 @@ class MultiTalkPredictor:
         
         # Load wav2vec models optimized for high VRAM
         print("Loading wav2vec models...")
-        audio_device = self.device if torch.cuda.is_available() and torch.cuda.get_device_properties(0).total_memory > 40 * 1024**3 else 'cpu'
+        audio_device = self.device if torch.cuda.is_available() and torch.cuda.get_device_properties(0).total_memory > 50 * 1024**3 else 'cpu'
         print(f"Loading audio encoder on: {audio_device}")
         
         self.audio_encoder = Wav2Vec2Model.from_pretrained(
@@ -213,7 +213,7 @@ class MultiTalkPredictor:
             vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
             print(f"🔍 Detected {vram_gb:.1f}GB VRAM")
             
-            if vram_gb > 40:  # High VRAM setup
+            if vram_gb > 50:  # High VRAM setup
                 print("🚀 High-VRAM detected: Enabling maximum performance optimizations")
                 # Enable advanced GPU features for maximum speed
                 torch.backends.cuda.enable_flash_sdp(True)

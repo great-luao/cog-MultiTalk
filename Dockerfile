@@ -59,8 +59,23 @@ RUN pip install -r /tmp/requirements.txt --no-cache-dir && \
     pip install flash-attn --no-build-isolation && \
     rm /tmp/requirements.txt
 
+# Install and configure OpenSSH server for SSH access
+RUN apt-get update && apt-get install -y --no-install-recommends openssh-server && \
+    rm -rf /var/lib/apt/lists/* && \
+    mkdir -p /var/run/sshd && \
+    sed -i 's/^#\?PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config && \
+    sed -i 's/^#\?PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+
+# Configure Warp terminal integration
+RUN echo 'printf '"'"'\eP$f{"hook": "SourcedRcFileForWarp", "value": { "shell": "bash"}}\x9c'"'"'' >> ~/.bashrc && \
+    echo "Warp terminal integration configured"
+
+# Expose SSH port
+EXPOSE 22
+
 # Set working directory
 WORKDIR /workspace
 
-# Keep container running
-CMD ["/bin/bash"]
+# Start SSHD and keep container running. Password can be overridden via env SSH_PASSWORD
+ENV SSH_PASSWORD=runpod
+CMD ["/bin/bash", "-lc", "echo root:$SSH_PASSWORD | chpasswd && /usr/sbin/sshd -D"]
