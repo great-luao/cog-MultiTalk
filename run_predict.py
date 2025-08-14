@@ -6,6 +6,28 @@ Removes Cog dependencies while maintaining all functionality
 
 import os
 import sys
+import argparse
+import subprocess
+import time
+import tempfile
+import logging
+import warnings
+import shutil
+from typing import Optional
+from types import SimpleNamespace
+import torch
+import numpy as np
+import random
+import soundfile as sf
+# Import MultiTalk components
+import wan
+from wan.configs import WAN_CONFIGS
+from transformers import Wav2Vec2FeatureExtractor
+from src.audio_analysis.wav2vec2 import Wav2Vec2Model
+import librosa
+import pyloudnorm as pyln
+from einops import rearrange
+from wan.utils.multitalk_utils import save_video_ffmpeg
 
 # Add workspace to Python path to find the MultiTalk modules
 sys.path.insert(0, '/workspace/cog-MultiTalk')
@@ -19,34 +41,10 @@ os.environ["HF_DATASETS_CACHE"] = MODEL_CACHE
 os.environ["TRANSFORMERS_CACHE"] = MODEL_CACHE
 os.environ["HUGGINGFACE_HUB_CACHE"] = MODEL_CACHE
 
-import argparse
-import subprocess
-import time
-import tempfile
-import logging
-import warnings
-import shutil
-from typing import Optional
-from types import SimpleNamespace
-
 # Suppress warnings for cleaner output
 warnings.filterwarnings('ignore')
 
-import torch
-import numpy as np
-import random
-import soundfile as sf
-
-# Import MultiTalk components
-import wan
-from wan.configs import WAN_CONFIGS
-from transformers import Wav2Vec2FeatureExtractor
-from src.audio_analysis.wav2vec2 import Wav2Vec2Model
-import librosa
-import pyloudnorm as pyln
-from einops import rearrange
-from wan.utils.multitalk_utils import save_video_ffmpeg
-
+MAX_FRAMES = 1501
 
 def loudness_norm(audio_array, sr=16000, lufs=-23):
     meter = pyln.Meter(sr)
@@ -259,18 +257,18 @@ class MultiTalkPredictor:
             else:
                 num_frames = frames_upper
             
-            # Ensure it's within bounds [25, 201]
-            num_frames = max(25, min(num_frames, 201))
+            # Ensure it's within bounds [25, MAX_FRAMES]
+            num_frames = max(25, min(num_frames, MAX_FRAMES))
             
             # Final safety check and adjustment if needed
-            while (num_frames - 1) % 4 != 0 and num_frames <= 201:
+            while (num_frames - 1) % 4 != 0 and num_frames <= MAX_FRAMES:
                 num_frames += 1
             
             print(f"📐 Auto-corrected num_frames from {original_frames} to {num_frames} (required format: 4n+1)")
         
         # Validate final bounds
-        if num_frames < 25 or num_frames > 201:
-            raise ValueError(f"num_frames must be between 25 and 201, got {num_frames}")
+        if num_frames < 25 or num_frames > MAX_FRAMES:
+            raise ValueError(f"num_frames must be between 25 and {MAX_FRAMES}, got {num_frames}")
         
         # Set random seed
         if seed is None:
@@ -428,33 +426,59 @@ def main():
     parser.add_argument('--first-audio', type=str, required=True, help='Path to first audio file')
     parser.add_argument('--prompt', type=str, default="A smiling man and woman wearing headphones sit in front of microphones, appearing to host a podcast.", help='Text prompt describing the scene')
     parser.add_argument('--second-audio', type=str, default=None, help='Path to second audio file (optional, for multi-person)')
-    parser.add_argument('--num-frames', type=int, default=81, help='Number of frames to generate (25-201)')
+    parser.add_argument('--num-frames', type=int, default=81, help=f'Number of frames to generate (25-{MAX_FRAMES})')
     parser.add_argument('--sampling-steps', type=int, default=40, help='Number of sampling steps (2-100)')
     parser.add_argument('--seed', type=int, default=None, help='Random seed for reproducibility')
     parser.add_argument('--turbo', action='store_true', help='Enable turbo mode for faster generation')
     parser.add_argument('--no-turbo', dest='turbo', action='store_false', help='Disable turbo mode for better quality')
     parser.add_argument('--output', type=str, default=None, help='Output video path')
+    parser.add_argument('--server-url', type=str, default=None, help='If set, send request to persistent model server (e.g., http://localhost:5000)')
     parser.set_defaults(turbo=True)
     
     args = parser.parse_args()
     
-    # Initialize predictor
-    predictor = MultiTalkPredictor()
-    
-    # Run prediction
-    output_path = predictor.predict(
-        image=args.image,
-        first_audio=args.first_audio,
-        prompt=args.prompt,
-        second_audio=args.second_audio,
-        num_frames=args.num_frames,
-        sampling_steps=args.sampling_steps,
-        seed=args.seed,
-        turbo=args.turbo,
-        output_path=args.output
-    )
-    
-    print(f"\n🎉 Video saved to: {output_path}")
+    if args.server_url:
+        # Use remote server to avoid reloading models locally
+        try:
+            import requests
+        except ImportError:
+            print("The 'requests' package is required for --server-url mode. Please install it.")
+            sys.exit(1)
+
+        payload = {
+            "image": args.image,
+            "first_audio": args.first_audio,
+            "prompt": args.prompt,
+            "second_audio": args.second_audio,
+            "num_frames": args.num_frames,
+            "sampling_steps": args.sampling_steps,
+            "seed": args.seed,
+            "turbo": args.turbo,
+            "output_path": args.output,
+        }
+        url = args.server_url.rstrip('/') + '/predict'
+        resp = requests.post(url, json=payload, timeout=3600)
+        if resp.status_code != 200:
+            print(f"Server error {resp.status_code}: {resp.text}")
+            sys.exit(1)
+        data = resp.json()
+        output_path = data.get('output_path')
+        print(f"\n🎉 Video saved to: {output_path}")
+    else:
+        # Local mode: load models and run
+        predictor = MultiTalkPredictor()
+        output_path = predictor.predict(
+            image=args.image,
+            first_audio=args.first_audio,
+            prompt=args.prompt,
+            second_audio=args.second_audio,
+            num_frames=args.num_frames,
+            sampling_steps=args.sampling_steps,
+            seed=args.seed,
+            turbo=args.turbo,
+            output_path=args.output
+        )
+        print(f"\n🎉 Video saved to: {output_path}")
 
 
 if __name__ == "__main__":

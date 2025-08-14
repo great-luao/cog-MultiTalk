@@ -377,11 +377,12 @@ class MultiTalkPipeline:
             full_audio_emb = torch.load(audio_embedding_path)
             if torch.isnan(full_audio_emb).any():
                 continue
+            # TODO(Perhaps): Pad audio embedding if the audio length is less than the required frame nums.
             if full_audio_emb.shape[0] <= frame_num:
                 continue
             full_audio_embs.append(full_audio_emb) 
         
-        assert len(full_audio_embs) == HUMAN_NUMBER, f"Aduio file not exists or length not satisfies frame nums."
+        assert len(full_audio_embs) == HUMAN_NUMBER, "Aduio file not exists or length not satisfies frame nums."
 
         # preprocess text embedding
         if n_prompt == "":
