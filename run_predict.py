@@ -191,6 +191,20 @@ class MultiTalkPredictor:
             local_files_only=True
         )
         self.audio_device = audio_device
+
+        # Load MultiTalk pipeline
+        print("Loading MultiTalk pipeline...")
+        self.cfg = WAN_CONFIGS["multitalk-14B"]
+        self.wan_i2v = wan.MultiTalkPipeline(
+            config=self.cfg,
+            checkpoint_dir=self.ckpt_dir,
+            device_id=0,
+            rank=0,
+            t5_fsdp=False,
+            dit_fsdp=False, 
+            use_usp=False,
+            t5_cpu=False  # Keep T5 on GPU for speed
+        )
         
         # GPU optimizations for high-VRAM setup (A100/H100/H200)
         if torch.cuda.is_available():
@@ -210,22 +224,6 @@ class MultiTalkPredictor:
                 print("🔧 Standard GPU optimizations enabled")
                 torch.backends.cuda.enable_flash_sdp(True)
                 torch.cuda.empty_cache()
-
-        # Load MultiTalk pipeline
-        print("Loading MultiTalk pipeline...")
-        self.cfg = WAN_CONFIGS["multitalk-14B"]
-        self.wan_i2v = wan.MultiTalkPipeline(
-            config=self.cfg,
-            checkpoint_dir=self.ckpt_dir,
-            device_id=0,
-            rank=0,
-            t5_fsdp=False,
-            dit_fsdp=False, 
-            use_usp=False,
-            t5_cpu=False  # Keep T5 on GPU for speed
-        )
-        
-        torch.cuda.empty_cache()
 
         print("✅ Model setup completed successfully!")
 
