@@ -489,7 +489,7 @@ class MultiTalkPipeline:
                 human_masks = [human_mask1, human_mask2, background_mask]
             elif HUMAN_NUMBER==2:
                 if 'bbox' in input_data:
-                    assert len(input_data['bbox']) == len(input_data['cond_audio']), f"The number of target bbox should be the same with cond_audio"
+                    assert len(input_data['bbox']) == len(input_data['cond_audio']), "The number of target bbox should be the same with cond_audio"
                     background_mask = torch.zeros([src_h, src_w])
                     for _, person_bbox in input_data['bbox'].items():
                         x_min, y_min, x_max, y_max = person_bbox

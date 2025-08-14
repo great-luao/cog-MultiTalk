@@ -7,6 +7,7 @@ Removes Cog dependencies while maintaining all functionality
 import os
 import sys
 import argparse
+import json
 import subprocess
 import time
 import tempfile
@@ -237,7 +238,9 @@ class MultiTalkPredictor:
         sampling_steps: int = 40,
         seed: Optional[int] = None,
         turbo: bool = True,
-        output_path: Optional[str] = None
+        output_path: Optional[str] = None,
+        audio_type: Optional[str] = None,
+        bbox: Optional[dict] = None,
     ) -> str:
         """Generate a conversational video from audio and reference image"""
         
@@ -284,9 +287,9 @@ class MultiTalkPredictor:
             # Process audio and generate embeddings (following exact original pattern)
             if is_multi_person:
                 print("🎤 Processing multi-person audio...")
-                audio_type = "add"  # Sequential by default
+                selected_audio_type = audio_type if audio_type in ("add", "para") else "add"
                 speech1, speech2, combined_speech = audio_prepare_multi(
-                    str(first_audio), str(second_audio), audio_type
+                    str(first_audio), str(second_audio), selected_audio_type
                 )
                 
                 # Generate embeddings on optimal device
@@ -306,13 +309,17 @@ class MultiTalkPredictor:
                 input_data = {
                     "prompt": prompt,
                     "cond_image": str(image),
-                    "audio_type": audio_type,
+                    "audio_type": selected_audio_type,
                     "cond_audio": {
                         "person1": emb1_path,
                         "person2": emb2_path
                     },
                     "video_audio": sum_audio_path
                 }
+                # Optionally include bbox if keys match cond_audio
+                if bbox and isinstance(bbox, dict):
+                    if set(bbox.keys()) == set(input_data["cond_audio"].keys()):
+                        input_data["bbox"] = bbox
             else:
                 print("🎤 Processing single-person audio...")
                 speech = audio_prepare_single(str(first_audio))
@@ -334,6 +341,10 @@ class MultiTalkPredictor:
                     },
                     "video_audio": sum_audio_path
                 }
+                # Optionally include bbox if provided for single person
+                if bbox and isinstance(bbox, dict):
+                    if set(bbox.keys()) == set(input_data["cond_audio"].keys()):
+                        input_data["bbox"] = bbox
             
             print("🎬 Generating video...")
             
@@ -351,7 +362,7 @@ class MultiTalkPredictor:
                 teacache_thresh = 0.3
                 text_guide_scale = 5.0
                 audio_guide_scale = 4.0
-                shift = 7.0
+                shift = 3.0
                 offload_model = not high_vram  # Don't offload with high VRAM for maximum speed
                 print(f"🎬 QUALITY MODE: {sampling_steps} steps{', keeping models in GPU' if high_vram else ''}")
             
@@ -375,7 +386,7 @@ class MultiTalkPredictor:
                 audio_guide_scale=audio_guide_scale,
                 seed=seed,
                 offload_model=offload_model,
-                max_frames_num=num_frames,
+                # max_frames_num=num_frames,
                 extra_args=extra_args
             )
             
@@ -432,6 +443,8 @@ def main():
     parser.add_argument('--turbo', action='store_true', help='Enable turbo mode for faster generation')
     parser.add_argument('--output', type=str, default=None, help='Output video path')
     parser.add_argument('--server-url', type=str, default=None, help='If set, send request to persistent model server (e.g., http://localhost:5000)')
+    parser.add_argument('--audio-type', type=str, choices=['add', 'para'], default=None, help='Audio mixing type for multi-person (add or para)')
+    parser.add_argument('--bbox', type=str, default=None, help='BBox JSON string mapping person ids to [x_min, y_min, x_max, y_max]')
     # Default: turbo is off unless --turbo is provided
     
     args = parser.parse_args()
@@ -444,6 +457,14 @@ def main():
             print("The 'requests' package is required for --server-url mode. Please install it.")
             sys.exit(1)
 
+        bbox_payload = None
+        if args.bbox:
+            try:
+                bbox_payload = json.loads(args.bbox)
+            except json.JSONDecodeError as e:
+                print(f"Invalid --bbox JSON: {e}")
+                sys.exit(1)
+
         payload = {
             "image": args.image,
             "first_audio": args.first_audio,
@@ -454,6 +475,8 @@ def main():
             "seed": args.seed,
             "turbo": args.turbo,
             "output_path": args.output,
+            "audio_type": args.audio_type,
+            "bbox": bbox_payload,
         }
         url = args.server_url.rstrip('/') + '/predict'
         resp = requests.post(url, json=payload, timeout=36000)
@@ -466,6 +489,13 @@ def main():
     else:
         # Local mode: load models and run
         predictor = MultiTalkPredictor()
+        bbox_parsed = None
+        if args.bbox:
+            try:
+                bbox_parsed = json.loads(args.bbox)
+            except json.JSONDecodeError as e:
+                print(f"Invalid --bbox JSON: {e}")
+                sys.exit(1)
         output_path = predictor.predict(
             image=args.image,
             first_audio=args.first_audio,
@@ -475,7 +505,9 @@ def main():
             sampling_steps=args.sampling_steps,
             seed=args.seed,
             turbo=args.turbo,
-            output_path=args.output
+            output_path=args.output,
+            audio_type=args.audio_type,
+            bbox=bbox_parsed,
         )
         print(f"\n🎉 Video saved to: {output_path}")
 

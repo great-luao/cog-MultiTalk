@@ -58,8 +58,10 @@ def create_app() -> Flask:
             num_frames: int = int(data.get("num_frames", 81))
             sampling_steps: int = int(data.get("sampling_steps", 40))
             seed: Optional[int] = data.get("seed")
-            turbo: bool = bool(data.get("turbo", True))
+            turbo: bool = bool(data.get("turbo", False))
             output_path: Optional[str] = data.get("output_path")
+            audio_type: Optional[str] = data.get("audio_type")
+            bbox = data.get("bbox")
 
             if not image or not first_audio:
                 return jsonify({
@@ -76,6 +78,8 @@ def create_app() -> Flask:
                 seed=seed,
                 turbo=turbo,
                 output_path=output_path,
+                audio_type=audio_type,
+                bbox=bbox,
             )
 
             return jsonify({"output_path": result_path}), 200
