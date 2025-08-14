@@ -23,13 +23,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Python 3.12 (separate RUN; no trailing backslash)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.12 \
-    python3.12-dev && \
-    rm -rf /var/lib/apt/lists/* && \
-    apt-get clean
-
 # Install pget for fast model downloads
 RUN curl -o /usr/local/bin/pget -L "https://github.com/replicate/pget/releases/latest/download/pget_$(uname -s)_$(uname -m)" && \
     chmod +x /usr/local/bin/pget
@@ -38,17 +31,35 @@ RUN curl -o /usr/local/bin/pget -L "https://github.com/replicate/pget/releases/l
 RUN apt-get update && apt-get install -y --no-install-recommends tmux && \
     rm -rf /var/lib/apt/lists/*
 
-# Install pip for Python 3.12
-RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.12
+# Install Python 3.12 (separate RUN; no trailing backslash)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.12 \
+    python3.12-dev \
+    python3.12-venv && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get clean
+
+# Install and configure OpenSSH server (and client) for SSH access
+RUN apt-get update && apt-get install -y --no-install-recommends openssh-server openssh-client && \
+rm -rf /var/lib/apt/lists/* && \
+mkdir -p /var/run/sshd && \
+sed -i 's/^#\?PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config && \
+sed -i 's/^#\?PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config
 
 # Set Python 3.12 as default
 RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.12 1 && \
     update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
 
-# Upgrade pip
-RUN python -m pip install --upgrade pip setuptools wheel
+# 创建 venv（不带 pip）
+RUN python3.12 -m venv --without-pip /opt/venv
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH=/opt/venv/bin:$PATH
 
-# Install Python dependencies
+# 在 venv 内安装/升级 pip 工具链
+RUN curl -sS https://bootstrap.pypa.io/get-pip.py | /opt/venv/bin/python && \
+    python -m pip install --upgrade pip setuptools wheel
+
+# Install Python dependencies (inside venv)
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install -r /tmp/requirements.txt --no-cache-dir && \
     rm /tmp/requirements.txt
@@ -58,13 +69,6 @@ RUN pip install --no-cache-dir jupyter
 
 # Install flash attn with right version: 2.8.0 post 2
 RUN pip install flash-attn==2.8.0.post2 --no-build-isolation
-
-# Install and configure OpenSSH server (and client) for SSH access
-RUN apt-get update && apt-get install -y --no-install-recommends openssh-server openssh-client && \
-    rm -rf /var/lib/apt/lists/* && \
-    mkdir -p /var/run/sshd && \
-    sed -i 's/^#\?PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config && \
-    sed -i 's/^#\?PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config
 
 # Configure Warp terminal integration
 RUN echo 'printf '"'"'\eP$f{"hook": "SourcedRcFileForWarp", "value": { "shell": "bash"}}\x9c'"'"'' >> ~/.bashrc && \
