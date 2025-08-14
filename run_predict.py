@@ -458,7 +458,7 @@ def main():
             "output_path": args.output,
         }
         url = args.server_url.rstrip('/') + '/predict'
-        resp = requests.post(url, json=payload, timeout=3600)
+        resp = requests.post(url, json=payload, timeout=36000)
         if resp.status_code != 200:
             print(f"Server error {resp.status_code}: {resp.text}")
             sys.exit(1)
