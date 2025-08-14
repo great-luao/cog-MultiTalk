@@ -225,6 +225,8 @@ class MultiTalkPredictor:
             t5_cpu=False  # Keep T5 on GPU for speed
         )
         
+        torch.cuda.empty_cache()
+
         print("✅ Model setup completed successfully!")
 
     def predict(
