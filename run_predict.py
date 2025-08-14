@@ -192,20 +192,6 @@ class MultiTalkPredictor:
         )
         self.audio_device = audio_device
         
-        # Load MultiTalk pipeline
-        print("Loading MultiTalk pipeline...")
-        self.cfg = WAN_CONFIGS["multitalk-14B"]
-        self.wan_i2v = wan.MultiTalkPipeline(
-            config=self.cfg,
-            checkpoint_dir=self.ckpt_dir,
-            device_id=0,
-            rank=0,
-            t5_fsdp=False,
-            dit_fsdp=False, 
-            use_usp=False,
-            t5_cpu=False  # Keep T5 on GPU for speed
-        )
-        
         # GPU optimizations for high-VRAM setup (A100/H100/H200)
         if torch.cuda.is_available():
             vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
@@ -224,6 +210,20 @@ class MultiTalkPredictor:
                 print("🔧 Standard GPU optimizations enabled")
                 torch.backends.cuda.enable_flash_sdp(True)
                 torch.cuda.empty_cache()
+
+        # Load MultiTalk pipeline
+        print("Loading MultiTalk pipeline...")
+        self.cfg = WAN_CONFIGS["multitalk-14B"]
+        self.wan_i2v = wan.MultiTalkPipeline(
+            config=self.cfg,
+            checkpoint_dir=self.ckpt_dir,
+            device_id=0,
+            rank=0,
+            t5_fsdp=False,
+            dit_fsdp=False, 
+            use_usp=False,
+            t5_cpu=False  # Keep T5 on GPU for speed
+        )
         
         print("✅ Model setup completed successfully!")
 
@@ -430,10 +430,9 @@ def main():
     parser.add_argument('--sampling-steps', type=int, default=40, help='Number of sampling steps (2-100)')
     parser.add_argument('--seed', type=int, default=None, help='Random seed for reproducibility')
     parser.add_argument('--turbo', action='store_true', help='Enable turbo mode for faster generation')
-    parser.add_argument('--no-turbo', dest='turbo', action='store_false', help='Disable turbo mode for better quality')
     parser.add_argument('--output', type=str, default=None, help='Output video path')
     parser.add_argument('--server-url', type=str, default=None, help='If set, send request to persistent model server (e.g., http://localhost:5000)')
-    parser.set_defaults(turbo=True)
+    # Default: turbo is off unless --turbo is provided
     
     args = parser.parse_args()
     
