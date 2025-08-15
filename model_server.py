@@ -62,6 +62,7 @@ def create_app() -> Flask:
             output_path: Optional[str] = data.get("output_path")
             audio_type: Optional[str] = data.get("audio_type")
             bbox = data.get("bbox")
+            save_intermediate: bool = bool(data.get("save_intermediate", False))
 
             if not image or not first_audio:
                 return jsonify({
@@ -80,6 +81,7 @@ def create_app() -> Flask:
                 output_path=output_path,
                 audio_type=audio_type,
                 bbox=bbox,
+                save_intermediate=save_intermediate,
             )
 
             return jsonify({"output_path": result_path}), 200

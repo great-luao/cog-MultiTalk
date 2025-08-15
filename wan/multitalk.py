@@ -26,6 +26,7 @@ from .modules.multitalk_model import WanModel, WanLayerNorm, WanRMSNorm
 from .modules.t5 import T5EncoderModel, T5LayerNorm, T5RelativeEmbedding
 from .modules.vae import WanVAE, CausalConv3d, RMS_norm, Upsample
 from .utils.multitalk_utils import MomentumBuffer, adaptive_projected_guidance
+from .utils.multitalk_utils import save_video_ffmpeg
 from src.vram_management import AutoWrappedLinear, AutoWrappedModule, enable_vram_management
 
 
@@ -305,7 +306,12 @@ class MultiTalkPipeline:
                  max_frames_num=1000,
                  face_scale=0.05,
                  progress=True,
-                 extra_args=None):
+                 extra_args=None,
+                 # Streaming save options
+                 stream_save: bool = False,
+                 stream_save_path: None | str = None,
+                 stream_fps: int = 25,
+                 ):
         r"""
         Generates video frames from input image and text prompt using diffusion process.
 
@@ -659,6 +665,23 @@ class MultiTalkPipeline:
                 gen_video_list.append(videos)
             else:
                 gen_video_list.append(videos[:, :, cur_motion_frames_num:])
+
+            # Optionally save intermediate progress video (every iteration)
+            if stream_save and stream_save_path is not None:
+                try:
+                    gen_video_so_far = torch.cat(gen_video_list, dim=2)
+                except Exception:
+                    gen_video_so_far = None
+                if gen_video_so_far is not None:
+                    try:
+                        save_video_ffmpeg(
+                            gen_video_so_far[0],
+                            stream_save_path,
+                            [input_data['video_audio']],
+                            fps=stream_fps,
+                        )
+                    except Exception:
+                        pass
 
             # decide whether is done
             if arrive_last_frame: break
