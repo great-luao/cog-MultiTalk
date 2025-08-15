@@ -241,6 +241,8 @@ class MultiTalkPredictor:
         output_path: Optional[str] = None,
         audio_type: Optional[str] = None,
         bbox: Optional[dict] = None,
+        save_intermediate: bool = False,
+        save_interval_frames: Optional[int] = None,
     ) -> str:
         """Generate a conversational video from audio and reference image"""
         
@@ -374,6 +376,10 @@ class MultiTalkPredictor:
                 size='multitalk-480'
             )
             
+            # Ensure streaming output directory exists if needed
+            if save_intermediate:
+                os.makedirs("/workspace/cog-MultiTalk/outputs", exist_ok=True)
+
             # Generate video using loaded pipeline (exact parameters from original)
             video = self.wan_i2v.generate(
                 input_data,
@@ -387,7 +393,11 @@ class MultiTalkPredictor:
                 seed=seed,
                 offload_model=offload_model,
                 # max_frames_num=num_frames,
-                extra_args=extra_args
+                extra_args=extra_args,
+                stream_save=save_intermediate,
+                stream_save_path=f"/workspace/cog-MultiTalk/outputs/stream_{abs(hash(prompt + str(seed))) % 10000}",
+                stream_save_interval_frames=save_interval_frames,
+                stream_fps=25,
             )
             
             # Save video (following original save pattern)
@@ -445,6 +455,7 @@ def main():
     parser.add_argument('--server-url', type=str, default=None, help='If set, send request to persistent model server (e.g., http://localhost:5000)')
     parser.add_argument('--audio-type', type=str, choices=['add', 'para'], default=None, help='Audio mixing type for multi-person (add or para)')
     parser.add_argument('--bbox', type=str, default=None, help='BBox JSON string mapping person ids to [x_min, y_min, x_max, y_max]')
+    parser.add_argument('--save-intermediate', action='store_true', help='Save intermediate partial videos during long generation')
     # Default: turbo is off unless --turbo is provided
     
     args = parser.parse_args()
@@ -477,6 +488,7 @@ def main():
             "output_path": args.output,
             "audio_type": args.audio_type,
             "bbox": bbox_payload,
+            "save_intermediate": args.save_intermediate,
         }
         url = args.server_url.rstrip('/') + '/predict'
         resp = requests.post(url, json=payload, timeout=36000)
@@ -508,6 +520,7 @@ def main():
             output_path=args.output,
             audio_type=args.audio_type,
             bbox=bbox_parsed,
+            save_intermediate=args.save_intermediate,
         )
         print(f"\n🎉 Video saved to: {output_path}")
 
