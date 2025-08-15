@@ -396,7 +396,6 @@ class MultiTalkPredictor:
                 extra_args=extra_args,
                 stream_save=save_intermediate,
                 stream_save_path=f"/workspace/cog-MultiTalk/outputs/stream_{abs(hash(prompt + str(seed))) % 10000}",
-                stream_save_interval_frames=save_interval_frames,
                 stream_fps=25,
             )
             
