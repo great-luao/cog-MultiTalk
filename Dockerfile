@@ -59,16 +59,36 @@ ENV PATH=/opt/venv/bin:$PATH
 RUN curl -sS https://bootstrap.pypa.io/get-pip.py | /opt/venv/bin/python && \
     python -m pip install --upgrade pip setuptools wheel
 
-# Install Python dependencies (inside venv)
+# Install Python dependencies (inside venv, include torch)
 COPY requirements.txt /tmp/requirements.txt
-RUN pip install -r /tmp/requirements.txt --no-cache-dir && \
+RUN pip install -r /tmp/requirements.txt && \
     rm /tmp/requirements.txt
 
 # Install Jupyter for optional web access
 RUN pip install --no-cache-dir jupyter
 
-# Install flash attn with right version: 2.8.0 post 2
-RUN pip install flash-attn==2.8.0.post2 --no-build-isolation
+# Install flash attn via prebuilt wheel (Py3.12 / Torch 2.7 / CUDA 12.x); fallback to source build if incompatible
+RUN wget -O /tmp/flash_attn.whl \
+      https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v2.8.0.post2/flash_attn-2.8.0.post2+cu12torch2.7cxx11abiFALSE-cp312-cp312-linux_x86_64.whl && \
+    (pip install --no-cache-dir /tmp/flash_attn.whl && rm -f /tmp/flash_attn.whl) || \
+    (echo "Prebuilt flash_attn wheel not found/compatible, falling back to source build..." && \
+     rm -f /tmp/flash_attn.whl && \
+     export MAX_JOBS=1 && \
+     pip install flash-attn==2.8.0.post2 --no-build-isolation --no-cache-dir)
+
+# Switch to bash for nvm-related steps
+SHELL ["/bin/bash", "-lc"]
+
+# Install Node.js (v22) via nvm and install Claude Code
+ENV NVM_DIR=/root/.nvm
+RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash && \
+    source "$NVM_DIR/nvm.sh" && \
+    nvm install 22 && nvm alias default 22 && nvm use default && \
+    ln -sf "$NVM_DIR/versions/node/$(nvm version)/bin/node" /usr/local/bin/node && \
+    ln -sf "$NVM_DIR/versions/node/$(nvm version)/bin/npm" /usr/local/bin/npm && \
+    ln -sf "$NVM_DIR/versions/node/$(nvm version)/bin/npx" /usr/local/bin/npx && \
+    npm install -g @anthropic-ai/claude-code && \
+    node -v && npm -v
 
 # Configure Warp terminal integration
 RUN echo 'printf '"'"'\eP$f{"hook": "SourcedRcFileForWarp", "value": { "shell": "bash"}}\x9c'"'"'' >> ~/.bashrc && \
@@ -76,12 +96,6 @@ RUN echo 'printf '"'"'\eP$f{"hook": "SourcedRcFileForWarp", "value": { "shell": 
 
 # Expose SSH port
 EXPOSE 22
-
-# Configure Git and SSH known_hosts (safe defaults; no private keys baked into image)
-RUN git config --global user.name "great-luao" && \
-    git config --global user.email "luao@shanghaitech.edu.cn" && \
-    mkdir -p /root/.ssh && chmod 700 /root/.ssh && \
-    ssh-keyscan -T 10 github.com >> /root/.ssh/known_hosts
 
 # Expose port for potential API usage or HTMLS
 EXPOSE 8000 7860 8888
