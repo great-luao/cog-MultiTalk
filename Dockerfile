@@ -61,7 +61,7 @@ RUN curl -sS https://bootstrap.pypa.io/get-pip.py | /opt/venv/bin/python && \
 
 # Install Python dependencies (inside venv, include torch)
 COPY requirements.txt /tmp/requirements.txt
-RUN pip install -r /tmp/requirements.txt && \
+RUN pip install -r /tmp/requirements.txt --no-cache-dir && \
     rm /tmp/requirements.txt
 
 # Install Jupyter for optional web access

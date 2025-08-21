@@ -13,18 +13,15 @@ fi
 git config --global user.name "great-luao" || true
 git config --global user.email "luao@shanghaitech.edu.cn" || true
 
-# 4) Load SSH key from workspace if present
+# 4) Load the github SSH key from workspace if present (copy to /tmp for chmod on FS that disallow perms)
 KEY_PATH="/workspace/.ssh/id_github"
+TMP_KEY="/tmp/id_github_temp"
 if [ -f "$KEY_PATH" ]; then
-  mkdir -p /root/.ssh
-  chmod 700 /root/.ssh
-  cp "$KEY_PATH" /root/.ssh/id_github
-  chmod 600 /root/.ssh/id_github
+  cp "$KEY_PATH" "$TMP_KEY" && chmod 600 "$TMP_KEY" || true
   eval "$(ssh-agent -s)"
-  ssh-add /root/.ssh/id_github || true
-  # Ensure GitHub known_hosts exists
-  ssh-keyscan -T 10 github.com >> /root/.ssh/known_hosts 2>/dev/null || true
-  echo "Loaded SSH key from $KEY_PATH"
+  ssh-agent bash -c "ssh-add $TMP_KEY"
+  ssh-add "$TMP_KEY" || true
+  echo "Loaded SSH key via temp path $TMP_KEY"
 else
   echo "No SSH key found at $KEY_PATH (skipping ssh-add)"
 fi
